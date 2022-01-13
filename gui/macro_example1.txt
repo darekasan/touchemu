@@ -1,0 +1,40 @@
+;;きららファンタジア とっておきlv周回用
+
+;スタート
+
+;;tap オート
+touch 0 550 1702
+wait 30
+release 0
+wait 200
+
+;;tap とっておき
+touch 0 8350 6753
+wait 30
+release 0
+wait 100
+
+;;tap とっておき
+touch 0 8350 6753
+wait 30
+release 0
+wait 100
+
+;;tap とっておき
+touch 0 8350 6753
+wait 30
+release 0
+wait 100
+
+;;tap とっておき
+touch 0 8350 6753
+wait 30
+release 0
+wait 100
+
+;;tap もう一度
+touch 0 9089 6228
+wait 30
+release 0
+
+goto スタート

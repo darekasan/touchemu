@@ -1,0 +1,307 @@
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+    <script>
+        window.addEventListener("load", function(){
+            document.querySelector("#bt_connect").addEventListener("click", connect,false);
+            document.querySelector("#bt_capture").addEventListener("click", startCapture,false);
+
+            document.querySelector("#bt_start").addEventListener("click", execute,false);
+            document.querySelector("#bt_stop").addEventListener("click", function(){stop=true},false);
+            document.querySelector("#bt_swap").addEventListener("click", function(){
+                let elmW = document.querySelector("#tb_w");
+                let elmH = document.querySelector("#tb_h");
+                let tmp = elmW.value;
+                elmW.value = elmH.value;
+                elmH.value = tmp;
+            },false);
+
+            document.querySelector("#tb_w").addEventListener("change", refresh,false);
+            document.querySelector("#tb_h").addEventListener("change", refresh,false);
+            document.querySelector("#tb_offset_x").addEventListener("change", refresh,false);
+            document.querySelector("#tb_offset_y").addEventListener("change", refresh,false);
+            document.querySelector("#tb_scale").addEventListener("change", refresh,false);
+
+            document.querySelector("#toucharea").addEventListener("mousemove", function(e){
+                let x = Math.ceil(map(e.offsetX,0,e.srcElement.offsetWidth,0,10000));
+                let y = Math.ceil(map(e.offsetY,0,e.srcElement.offsetHeight,0,10000));
+
+                if(document.querySelector("#cb_invx").checked) x=10000-x;
+                if(document.querySelector("#cb_invy").checked) y=10000-y;
+
+                let str= document.querySelector("#cb_swapxy").checked ? 
+                    `touch 0 ${y} ${x}\n`:
+                    `touch 0 ${x} ${y}\n`
+                ;
+                document.querySelector("#tb_output").value=str;
+                if(e.buttons==1){
+                    write(str);
+                }
+            },false);
+            document.querySelector("#toucharea").addEventListener("mousedown", function(e){
+                console.log(e);
+                let x = Math.ceil(map(e.offsetX,0,e.srcElement.offsetWidth,0,10000));
+                let y = Math.ceil(map(e.offsetY,0,e.srcElement.offsetHeight,0,10000));
+
+                if(document.querySelector("#cb_invx").checked) x=10000-x;
+                if(document.querySelector("#cb_invy").checked) y=10000-y;
+
+                let str= document.querySelector("#cb_swapxy").checked ? 
+                    `touch 0 ${y} ${x}\n`:
+                    `touch 0 ${x} ${y}\n`
+                ;
+                if(e.ctrlKey){
+                    insert(`;;tap \n${str}wait 30\n`);
+                }else{
+                    write(str);
+                }
+                
+            },false);
+            document.querySelector("#toucharea").addEventListener("mouseup", function(e){
+                if(e.ctrlKey){
+                    insert("release 0\n\n");
+                }else{
+                    write(`release 0\n`);
+                }
+            },false);
+
+            refresh();
+        },false);
+
+        let port;
+        let writer;
+        let enc = new TextEncoder();
+        
+        async function connect(){
+            port = await navigator.serial.requestPort();
+            await port.open({baudRate:115200});
+            writer = port.writable.getWriter();
+        }
+
+        async function startCapture(){
+            document.querySelector("#v_capture").srcObject = await navigator.mediaDevices.getDisplayMedia({video:true,video:false});
+        }
+
+        function refresh(){
+            let w=document.querySelector("#tb_w").value;
+            let h=document.querySelector("#tb_h").value;
+            let velm=document.querySelector("#v_capture");
+            velm.style.width=document.querySelector("#tb_scale").value+"%";
+            
+            velm.style.marginLeft=document.querySelector("#tb_offset_X").value+"%";
+            velm.style.marginTop=document.querySelector("#tb_offset_y").value+"%";
+            document.querySelector("#toucharea").style.aspectRatio = `${w}/${h}`;
+            
+        }
+
+        function write(str){
+            console.log(str);
+            if(writer!=null)
+            writer.write(enc.encode(str));
+        }
+        
+        function sleep(msec) {
+            return new Promise(function(resolve) {
+                setTimeout(function() {resolve()}, msec);
+            });
+        }
+
+        function map(val, inMin, inMax, outMin, outMax){
+            return outMin+(outMax-inMin)*(val-inMin)/(inMax-outMin);
+        }
+
+        function insert(str){
+            let ed=document.querySelector("#editor");
+            let oldstr = ed.value;
+            let newPos = ed.selectionEnd + str.length;
+            let newstr = oldstr.substring(0,ed.selectionEnd) + str + oldstr.substring(ed.selectionEnd);
+            ed.value = newstr;
+            ed.setSelectionRange(newPos,newPos);
+        }
+
+        function clickSnnipet(e){
+            insert("\n"+e.srcElement.innerText+"\n");
+            
+        }
+
+        function parseLine(str){
+            let array = str.split(" ");
+
+            if(str.trim()=""){
+                // nop
+            }else if(array[0].substring(0,1)==";"){
+                // ; ラベル
+            }else if(array[0]=="goto"){
+                
+            }else if(array[0]=="wait"){
+                parseInt(array[1]);
+            }else{
+                write(str+"\n");
+            }
+        }
+
+        let stop = false;
+
+        async function execute(){
+            stop = false;
+            let lines = document.querySelector("#editor").value.split("\n");
+
+            let list = document.querySelector("#macro_list");
+            list.innerHTML = "";
+            list.style.display="block";
+            document.querySelector("#editor_wrapper").style.display="none";
+
+            lines.forEach(function(line){
+                let child = document.createElement("li");
+                child.textContent = line;
+                list.appendChild(child);
+            });
+
+            for(let i=0;i<lines.length;i++){
+                if(stop)break;
+                let array = lines[i].split(" ");
+
+                document.querySelectorAll("#macro_list li").forEach(function(elm){
+                    elm.classList.remove("mark");
+                });
+                document.querySelectorAll("#macro_list li")[i].classList.add("mark");
+
+                if(lines[i].trim()==""){
+                    // nop
+                }else if(array[0].substring(0,1)==";"){
+                    // ; ラベル
+                }else if(array[0]=="goto"){
+                    let j=0;
+                    for(;j<lines.length;j++){
+                        if(lines[j].substring(0,1)==";"){
+                            if(lines[j].substring(1)==array[1]) break;
+                        }
+                    }
+                    i=j;
+                }else if(array[0]=="wait"){
+                    await sleep(parseInt(array[1]));
+                }else{
+                    write(lines[i]+"\n");
+                }
+
+                await sleep(10);
+            }
+
+            list.style.display="none";
+            document.querySelector("#editor_wrapper").style.display="block";
+        }
+
+    </script>
+    <style>
+        #toucharea{
+            width:100%;
+            aspect-ratio: 16/9;
+            border:solid 1px black;
+            overflow: hidden;
+            user-select: none;
+        }
+
+        #editor_wrapper{
+            width: 100%;
+        }
+
+        #editor {
+            width: 100%;
+            margin: 0;
+            height: 600px;
+            border:solid 1px black;
+        }
+        #v_capture {
+            user-select: none;
+            pointer-events: none;
+        }
+
+        #macro_list {
+            height: 600px;
+            overflow-y: scroll;
+        }
+
+        #macro_list li{
+            margin: 0;
+            font-size: 10pt;
+        }
+
+        .mark {
+            background-color: aquamarine;
+        }
+
+        .snnipet_wrapper a{
+            display: inline-block;
+            text-decoration: none;
+            color: black;
+            border: 1px solid black;
+            padding: 2px 5px;
+            margin:4px;
+        }
+
+        .w70{
+            width: 70px;
+        }
+
+        .split_h{
+            width: 100%;
+            display: flex;
+            margin:0;
+        }
+
+        .split_h .left{
+            width: 70%;
+        }
+        .split_h .right{
+            width: 30%;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="split_h">
+        <div class="left">
+            <h1>タッチ操作自動化するやつ</h1>
+            <p>
+                <button id="bt_connect">Connect</button>
+                <button id="bt_capture">Capture</button>
+                <button id="bt_start">Start</button>
+                <button id="bt_stop">Stop</button>
+                <input type="text" id="tb_output" value="" disabled>
+            </p>
+            <p>
+                <button id="bt_swap">Swap</button>
+                w:<input type="number" class="w70" id="tb_w" value="2400">
+                h:<input type="number" class="w70" id="tb_h" value="1080">
+                scale:<input type="number" class="w70" id="tb_scale" value="100">
+                x:<input type="number" class="w70" id="tb_offset_X" value="0">
+                y:<input type="number" class="w70" id="tb_offset_y" value="0">
+                <input type="checkbox" id="cb_swapxy">Swap input axis
+                <input type="checkbox" id="cb_invx">Invert x
+                <input type="checkbox" id="cb_invy">Invert y
+            </p>
+            <div id="toucharea">
+                <video id="v_capture" autoplay></video>
+            </div>
+        </div>
+        <div class="right">
+            <div id="editor_wrapper">
+                <div class="snnipet_wrapper">
+                    <a href="javascript:" onclick="clickSnnipet(event)">wait 100</a>
+                    <a href="javascript:" onclick="clickSnnipet(event)">;label</a>
+                    <a href="javascript:" onclick="clickSnnipet(event)">goto label</a>
+                    <a href="javascript:" onclick="clickSnnipet(event)">release 0</a>
+                </div>
+                <textarea id="editor"></textarea>
+            </div>
+            <ol id="macro_list" style="display: none;"></ol>
+        </div>
+    </div>
+
+    
+    
+</body>
+</html>
